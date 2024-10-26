@@ -137,9 +137,9 @@ public class TournamentBehavior implements Behavior {
         // Add the new direction to move history
         moveHistory.add(newDirection);
         positions.add(new Vector2d(pacman.getTilePosition().x(), pacman.getTilePosition().y()));
-        if (positions.size() > 100 && updatesSinceLastScore > 60) {
+        if (positions.size() > 40 && updatesSinceLastScore > 30) {
             positions.remove(0);
-            if(positions.get(0).equals(positions.get(99))) {
+            if(positions.get(0).equals(positions.get(39))) {
                 Random random = new Random();
                 newDirection = Direction.values()[random.nextInt(4)];
             }

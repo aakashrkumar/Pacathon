@@ -25,9 +25,9 @@ public class Lwjgl3Launcher {
         } else {
             Lwjgl3ApplicationConfiguration config = getDefaultConfiguration();
             // enable vsync to limit the fps to the monitor refresh rate
-            config.useVsync(true);
+            config.useVsync(false);
             // pacman runs at 60 updates per second
-            config.setForegroundFPS(60);
+            config.setForegroundFPS(240);
             return new Lwjgl3Application(new Tournament(), config);
         }
     }

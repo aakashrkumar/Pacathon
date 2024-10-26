@@ -47,7 +47,7 @@ public class Tournament extends ApplicationAdapter {
      */
     public Behavior setupBehavior() {
         // TODO: Choose your best client here
-        File file = new File("saves" + File.separator + "oct26-72" + File.separator + "best-calculator-36.json");
+        File file = new File("saves" + File.separator + "oct26-80" + File.separator + "best-calculator-63.json");
         if (!file.exists()) {
             System.err.println("Could not find the file: " + file.getAbsolutePath());
             return null;

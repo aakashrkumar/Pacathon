@@ -9,13 +9,13 @@ public class NeatConfig {
 
     public static boolean biasEnabled = true;
 
-    public static int neatInputNodes = 9;
+    public static int neatInputNodes = 8;
     public static int neatOutputNodes = 4;
 
 
-    public static boolean loadFromFile = false;
-    public static String folder = "oct26-5";
-    public static String file = "generation-8.json";
+    public static boolean loadFromFile = true;
+    public static String folder = "oct26-76";
+    public static String file = "generation-54.json";
 
     public static boolean USE_TOURNAMENT_SETTINGS = false;
 }

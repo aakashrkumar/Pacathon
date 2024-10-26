@@ -53,6 +53,8 @@ public class TournamentBehavior implements Behavior {
 
     int movesMade;
 
+    ArrayList<Vector2d> positions = new ArrayList<Vector2d>();
+
     public TournamentBehavior(@NotNull Calculator calculator) {
         this.calculator = calculator;
         this.random = new Random();
@@ -70,8 +72,8 @@ public class TournamentBehavior implements Behavior {
     public Direction getDirection(@NotNull Entity entity) {
         // --- DO NOT REMOVE ---
         if (pacman == null) {
-            pacman = (PacmanEntity) entity;
         }
+        pacman = (PacmanEntity) entity;
 
         int newScore = pacman.getMaze().getLevelManager().getScore();
         if (lastScore != newScore) {
@@ -132,11 +134,17 @@ public class TournamentBehavior implements Behavior {
         // Select the direction based on outputs
         Direction newDirection = selectDirectionFromOutputs(outputs);
 
-        // Update the score based on the chosen direction
-        updateScore(newDirection);
-
         // Add the new direction to move history
         moveHistory.add(newDirection);
+        positions.add(new Vector2d(pacman.getTilePosition().x(), pacman.getTilePosition().y()));
+        if (positions.size() > 100 && updatesSinceLastScore > 60) {
+            positions.remove(0);
+            if(positions.get(0).equals(positions.get(99))) {
+                Random random = new Random();
+                newDirection = Direction.values()[random.nextInt(4)];
+            }
+        }
+
 
         return newDirection;
     }
@@ -338,7 +346,7 @@ public class TournamentBehavior implements Behavior {
             pacman.getMaze().getFrightenedTimer() <= 3 ? 0 : (float) (pacman.getMaze().getFrightenedTimer() / 200f + 0.5f),
 
             // Random input for variability
-            random.nextFloat(),
+//            random.nextFloat(),
         };
     }
 
@@ -368,33 +376,7 @@ public class TournamentBehavior implements Behavior {
         };
     }
 
-    /**
-     * Updates the score based on the new direction.
-     *
-     * @param newDirection the direction chosen
-     */
-    private void updateScore(Direction newDirection) {
-        Vector2i newPosition = new Vector2i(
-            pacman.getTilePosition().x() + newDirection.getDx(),
-            pacman.getTilePosition().y() + newDirection.getDy()
-        );
 
-        // Example score modifications (can be customized)
-        // if (isMovingTowardsPellet(newPosition)) {
-        //     scoreModifier += 5;
-        // }
-        // if (pacman.getMaze().getTile(newPosition).getState() == TileState.PELLET) {
-        //     scoreModifier += 100;
-        // }
-        // if (!pacman.canMove(newDirection)) {
-        //     scoreModifier -= 10;
-        // }
-
-        // Global score penalty to encourage progress
-        // scoreModifier -= 0.001f;
-
-        // Update the score in the calculator
-    }
 
     /**
      * Retrieves the first step direction towards the target tile using the pre-computed distances.
@@ -514,6 +496,8 @@ public class TournamentBehavior implements Behavior {
             nearestPowerPellet = pacman.getMaze().getTile(0, 0);
         }
 
+        System.out.println(nearestPowerPellet.getPosition());
+
         return nearestPowerPellet;
     }
 
@@ -543,7 +527,7 @@ public class TournamentBehavior implements Behavior {
         if(nearestPellet == null) {
             nearestPellet = pacman.getMaze().getTile(0, 0);
         }
-
+        System.out.println(nearestPellet.getPosition());
         return nearestPellet;
     }
 

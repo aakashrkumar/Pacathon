@@ -156,7 +156,7 @@ public class NeatPacmanBehavior implements Behavior {
         }
         if (numGhosts > 0) {
             if(lastScore > 200){
-                maxUpdates = 60 * 120; // 2 minutes
+                maxUpdates = 60 * 30; // 2 minutes
             }else{
                 maxUpdates = 60 * 3; // 3 seconds
             }
@@ -336,7 +336,7 @@ public class NeatPacmanBehavior implements Behavior {
             pacman.getMaze().getFrightenedTimer() <= 3 ? 0 : (float) (pacman.getMaze().getFrightenedTimer() / 200f + 0.5),
 //
 //            // Random input for variability
-            random.nextFloat(),
+//            random.nextFloat(),
         };
 
     }

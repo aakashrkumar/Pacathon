@@ -50,7 +50,7 @@ public final class SpecialTrainingConditions {
                         continue;
 
                     if (ThreadLocalRandom.current().nextDouble() < pelletDensity) {
-                        maze.getTile(x, y).setState(TileState.SPACE);
+//                        maze.getTile(x, y).setState(TileState.SPACE);
                     }
                 }
             }

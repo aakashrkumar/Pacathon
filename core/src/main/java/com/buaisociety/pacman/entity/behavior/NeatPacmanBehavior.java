@@ -54,6 +54,7 @@ public class NeatPacmanBehavior implements Behavior {
             pacman = (PacmanEntity) entity;
         }
         distances = computeDistances();
+        Vector2ic dimensions = pacman.getMaze().getDimensions();
         // We are going to use these directions a lot for different inputs. Get them all once for clarity and brevity
         Direction forward = pacman.getDirection();
         Direction left = pacman.getDirection().left();
@@ -101,11 +102,10 @@ public class NeatPacmanBehavior implements Behavior {
                 if (position.x() < 0 || position.x() >= pacman.getMaze().getDimensions().x() || position.y() < 0 || position.y() >= pacman.getMaze().getDimensions().y()) {
                     break;
                 }
-                rayCast[i] = (float) Math.sqrt(Math.pow(position.x() - pacman.getTilePosition().x(), 2) + Math.pow(position.y() - pacman.getTilePosition().y(), 2));
+                rayCast[i] = (float) Math.sqrt(Math.pow((0.0 + position.x() - pacman.getTilePosition().x())/dimensions.x(), 2) + Math.pow((position.y() - pacman.getTilePosition().y() + 0.0)/dimensions.y(), 2));
             }
         }
 
-        Vector2ic dimensions = pacman.getMaze().getDimensions();
 
         Tile nearestPellet = getNearestPellet();
         Vector2d relativeCoordinates = translateRelative(nearestPellet.getPosition());

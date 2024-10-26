@@ -25,6 +25,11 @@ public class NeatPacmanBehavior implements Behavior {
     private final @NotNull Client client;
     private @Nullable PacmanEntity pacman;
 
+    private Direction forward = Direction.UP;
+    private Direction left = Direction.LEFT;
+    private Direction right = Direction.RIGHT;
+    private Direction behind = Direction.DOWN;
+
     // Score modifiers help us maintain "multiple pools" of points.
     // This is great for training, because we can take away points from
     // specific pools of points instead of subtracting from all.
@@ -56,10 +61,10 @@ public class NeatPacmanBehavior implements Behavior {
         distances = computeDistances();
         Vector2ic dimensions = pacman.getMaze().getDimensions();
         // We are going to use these directions a lot for different inputs. Get them all once for clarity and brevity
-        Direction forward = pacman.getDirection();
-        Direction left = pacman.getDirection().left();
-        Direction right = pacman.getDirection().right();
-        Direction behind = pacman.getDirection().behind();
+        forward = pacman.getDirection();
+        left = pacman.getDirection().left();
+        right = pacman.getDirection().right();
+        behind = pacman.getDirection().behind();
 
 
         // SPECIAL TRAINING CONDITIONS
@@ -170,30 +175,18 @@ public class NeatPacmanBehavior implements Behavior {
 
     public Vector2d translateRelative(Vector2ic coordinates) {
         // new coordinates are relative to pacman
-        Vector2i pacmanCoordinates = pacman.getTilePosition();
-        Vector2d newCoordinates = new Vector2d(coordinates.x() - pacmanCoordinates.x(), coordinates.y() - pacmanCoordinates.y());
-        // also orient the coordinates to the direction of pacman
-        switch (pacman.getDirection()) {
-            case UP -> {
-                double temp = newCoordinates.x();
-                newCoordinates.x = -newCoordinates.y();
-                newCoordinates.y = temp;
-            }
-            case DOWN -> {
-                double temp = newCoordinates.x();
-                newCoordinates.x = newCoordinates.y();
-                newCoordinates.y = -temp;
-            }
-            case LEFT -> {
-                newCoordinates.x = -newCoordinates.x();
-                newCoordinates.y = -newCoordinates.y();
-            }
-            case RIGHT -> {
-                // do nothing
-            }
-        }
 
-        return newCoordinates;
+        Vector2i pacmanCoordinates = pacman.getTilePosition();
+        Vector2d relative = new Vector2d(coordinates.x() - pacmanCoordinates.x(), coordinates.y() - pacmanCoordinates.y());
+        // also orient the coordinates to the direction of pacman
+        /*
+        * ex
+        * pelletX = (float) (relative.x() * forward.getDx() + relative.x() * right.getDx());
+        * pelletY = (float) (relative.y() * forward.getDy() + relative.y() * right.getDy());*/
+        double newCoordinatesX = relative.x() * forward.getDx() + relative.x() * right.getDx();
+        double newCoordinatesY = relative.y() * forward.getDy() + relative.y() * right.getDy();
+        relative.set(newCoordinatesX, newCoordinatesY);
+        return relative;
     }
 
     public Tile getNearestPellet() {

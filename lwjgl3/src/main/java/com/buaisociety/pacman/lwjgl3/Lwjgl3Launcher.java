@@ -13,14 +13,13 @@ public class Lwjgl3Launcher {
     }
 
     private static Lwjgl3Application createApplication() {
-        boolean isTraining = false; // set this as false to try out the tournament settings
+        boolean isTraining = true; // set this as false to try out the tournament settings
         if (isTraining) {
             Lwjgl3ApplicationConfiguration config = getDefaultConfiguration();
             // disable vsync to run the game as fast as possible
             config.useVsync(false);
             // hard limit on fps to see the game running at a reasonable speed
-            config.setForegroundFPS(400);
-            return new Lwjgl3Application(new Main(), config);
+             return new Lwjgl3Application(new Main(), config);
         } else {
             Lwjgl3ApplicationConfiguration config = getDefaultConfiguration();
             // enable vsync to limit the fps to the monitor refresh rate

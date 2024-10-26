@@ -75,7 +75,7 @@ public class Main extends ApplicationAdapter {
         secondLoop = new GameLoop(1);
 
         int processors = Runtime.getRuntime().availableProcessors();
-        threadPool = Executors.newFixedThreadPool(processors);
+        threadPool = Executors.newFixedThreadPool(Math.max(1, processors - 1));
         System.out.println("Using " + processors + " threads");
 
         // When all games have ended, reset
@@ -120,12 +120,12 @@ public class Main extends ApplicationAdapter {
             return impl;
         } else {
             Parameters neatParameters = new Parameters();
-            neatParameters.setMutateWeightChance(0.75f);
-            neatParameters.setWeightCoefficient(1.0f);  // speciate on weight more often
-            neatParameters.setTargetClientsPerSpecies(12);  // targeting ~12 clients per species
-            neatParameters.setStagnationLimit(10);  // lower stagnation limit
-            neatParameters.setUseBiasNode(true);  // use bias node
-            return new NeatImpl(4, 4, totalGames, neatParameters);
+            neatParameters.setMutateWeightChance(NeatConfig.mutateWeightChance);
+            neatParameters.setWeightCoefficient(NeatConfig.weightCoefficient);  // speciate on weight more often
+            neatParameters.setTargetClientsPerSpecies(NeatConfig.targetClientsPerSpecies);  // targeting ~12 clients per species
+            neatParameters.setStagnationLimit(NeatConfig.stagnationLimit);  // lower stagnation limit
+            neatParameters.setUseBiasNode(NeatConfig.biasEnabled);  // use bias node
+            return new NeatImpl(NeatConfig.neatInputNodes, NeatConfig.neatOutputNodes, totalGames, neatParameters);
         }
     }
 

@@ -19,6 +19,7 @@ import org.joml.Vector2ic;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.Queue;
+import java.util.Random;
 
 public class NeatPacmanBehavior implements Behavior {
 
@@ -42,8 +43,11 @@ public class NeatPacmanBehavior implements Behavior {
 
     int[][] distances;
 
+    Random random;
+
     public NeatPacmanBehavior(@NotNull Client client) {
         this.client = client;
+        random = new Random();
     }
 
     /**
@@ -58,6 +62,8 @@ public class NeatPacmanBehavior implements Behavior {
         if (pacman == null) {
             pacman = (PacmanEntity) entity;
         }
+
+
         distances = computeDistances();
         Vector2ic dimensions = pacman.getMaze().getDimensions();
         // We are going to use these directions a lot for different inputs. Get them all once for clarity and brevity
@@ -121,7 +127,9 @@ public class NeatPacmanBehavior implements Behavior {
             rayCast[2],
             rayCast[3],
             (float) relativeCoordinates.x() / (float) dimensions.x(),
-            (float) relativeCoordinates.y() / (float) dimensions.y()
+            (float) relativeCoordinates.y() / (float) dimensions.y(),
+            random.nextFloat(),
+
         }).join();
 
         int index = 0;

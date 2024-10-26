@@ -51,9 +51,12 @@ public class TournamentBehavior implements Behavior {
 
     private final Random random;
 
+    int movesMade;
+
     public TournamentBehavior(@NotNull Calculator calculator) {
         this.calculator = calculator;
         this.random = new Random();
+
     }
 
     /**
@@ -157,7 +160,7 @@ public class TournamentBehavior implements Behavior {
             lastScore = currentScore;
             updatesSinceLastScore = 0;
             if (currentScore > 100_000) {
-                pacman.kill();
+//                pacman.kill();
                 return;
             }
         } else {
@@ -179,7 +182,7 @@ public class TournamentBehavior implements Behavior {
             }
         }
         if (updatesSinceLastScore > maxUpdates) {
-            pacman.kill();
+//            pacman.kill();
         }
     }
 

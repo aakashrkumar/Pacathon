@@ -47,7 +47,7 @@ public class Tournament extends ApplicationAdapter {
      */
     public Behavior setupBehavior() {
         // TODO: Choose your best client here
-        File file = new File("saves" + File.separator + "oct26-72" + File.separator + "best-calculator-35.json");
+        File file = new File("saves" + File.separator + "oct26-72" + File.separator + "best-calculator-36.json");
         if (!file.exists()) {
             System.err.println("Could not find the file: " + file.getAbsolutePath());
             return null;
@@ -98,8 +98,8 @@ public class Tournament extends ApplicationAdapter {
         gameManager = new GameManager(events, config);
         gameManager.nextLevel();
 
-        gameLoop = new GameLoop(60);
-        secondLoop = new GameLoop(1);
+        gameLoop = new GameLoop(6000);
+        secondLoop = new GameLoop(1000);
 
         // Maximize window
         Graphics.DisplayMode displayMode = Gdx.graphics.getDisplayMode();

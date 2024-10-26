@@ -51,12 +51,14 @@ public class Main extends ApplicationAdapter {
     private final @NotNull EventSystem events = new EventSystem();
     private final @NotNull Vector2i visibleGames = new Vector2i(4, 2);
     private final @NotNull List<PacmanNeatClient> managers = new ArrayList<>();
-    private final int totalGames = 250;
+    private final int totalGames = 500;
     private GameLoop secondLoop;  // 1 update per second
     private boolean paused;
     private boolean showNetworks;
     private int frames;
     private int fps;
+
+    private boolean USE_TOURNAMENT_SETTINGS = NeatConfig.USE_TOURNAMENT_SETTINGS;
 
     // deep learning
     private Neat neat;
@@ -103,9 +105,9 @@ public class Main extends ApplicationAdapter {
 
     public @NotNull Neat createNeat() {
         // Change this to true/false as needed, if you want to load from file
-        if (false) {
+        if (NeatConfig.loadFromFile) {
             // TODO: Change this to the exact file you want to load
-            File exactFile = new File("saves" + File.separator + "oct26-4" + File.separator + "generation-51.json");
+            File exactFile = new File("saves" + File.separator + NeatConfig.folder + File.separator + NeatConfig.file);
             // load exactFile contents to string
             String json;
             try {
@@ -180,6 +182,11 @@ public class Main extends ApplicationAdapter {
         for (int i = 0; i < totalGames; i++) {
             GameManager.Config config = new GameManager.Config();
             config.id = i;
+            if(USE_TOURNAMENT_SETTINGS) {
+                config.handicap = 8;
+                config.levelsPreset = "tournament_levels.json";
+            }
+
             GameManager gameManager = new GameManager(events, config);
             gameManager.nextLevel();
             gameManager.setExtraLives(0);

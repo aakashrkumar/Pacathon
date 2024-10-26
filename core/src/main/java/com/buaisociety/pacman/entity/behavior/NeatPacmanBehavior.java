@@ -29,24 +29,27 @@ public class NeatPacmanBehavior implements Behavior {
     private Direction right = Direction.RIGHT;
     private Direction behind = Direction.DOWN;
 
-
     // Score modifiers help us maintain "multiple pools" of points.
     // This is great for training, because we can take away points from
     // specific pools of points instead of subtracting from all.
     private float scoreModifier = 0;
 
-    public ArrayList<Direction> moveHistory = new ArrayList<>();
+    public final List<Direction> moveHistory = new ArrayList<>();
 
-    int lastScore = 0;
-    int updateSinceLastScore = 0;
+    private int lastScore = 0;
+    private int updatesSinceLastScore = 0;
 
-    int[][] distances;
+    private int[][] distances;
 
-    Random random;
+    public int numGhosts = 0;
+
+    public int visionRange = 2;
+
+    private final Random random;
 
     public NeatPacmanBehavior(@NotNull Client client) {
         this.client = client;
-        random = new Random();
+        this.random = new Random();
     }
 
     /**
@@ -58,249 +61,348 @@ public class NeatPacmanBehavior implements Behavior {
     @NotNull
     @Override
     public Direction getDirection(@NotNull Entity entity) {
-        if (pacman == null) {
-            pacman = (PacmanEntity) entity;
-        }
-
+        initializePacman(entity);
+        updateDirections();
 
         distances = computeDistances();
-        Vector2ic dimensions = pacman.getMaze().getDimensions();
-        // We are going to use these directions a lot for different inputs. Get them all once for clarity and brevity
-        forward = pacman.getDirection();
-        left = pacman.getDirection().left();
-        right = pacman.getDirection().right();
-        behind = pacman.getDirection().behind();
 
+        handleSpecialTrainingConditions();
 
-        // SPECIAL TRAINING CONDITIONS
-        // TODO: Make changes here to help with your training...
-        int newScore = pacman.getMaze().getLevelManager().getScore();
-        if (newScore > lastScore) {
-            lastScore = newScore;
-            updateSinceLastScore = 0;
-            if(newScore > 100_000){
-                pacman.kill();
-                return Direction.UP;
-            }
-        } else {
-            updateSinceLastScore++;
-        }
-
-        if (updateSinceLastScore > 60 * 10) {
-            pacman.kill();
-            return Direction.UP;
-
-        }
-
-        // END OF SPECIAL TRAINING CONDITIONS
-
-
-        // Input nodes 1, 2, 3, and 4 show if the pacman can move in the forward, left, right, and behind directions
-        boolean canMoveForward = pacman.canMove(forward);
-        boolean canMoveLeft = pacman.canMove(left);
-        boolean canMoveRight = pacman.canMove(right);
-        boolean canMoveBehind = pacman.canMove(behind);
-
-        float[] rayCast = new float[4];
-        for (int i = 0; i < 4; i++) {
-            Direction direction = switch (i) {
-                case 0 -> forward;
-                case 1 -> left;
-                case 2 -> right;
-                case 3 -> behind;
-                default -> throw new IllegalStateException("Unexpected value: " + i);
-            };
-            Vector2i position = new Vector2i(pacman.getTilePosition().x(), pacman.getTilePosition().y());
-            while (pacman.getMaze().getTile(position).getState() != TileState.WALL) {
-                position.add(direction.getDx(), direction.getDy());
-                if (position.x() < 0 || position.x() >= pacman.getMaze().getDimensions().x() || position.y() < 0 || position.y() >= pacman.getMaze().getDimensions().y()) {
-                    break;
-                }
-                rayCast[i] = (float) Math.sqrt(Math.pow((0.0 + position.x() - pacman.getTilePosition().x()) / dimensions.x(), 2) + Math.pow((position.y() - pacman.getTilePosition().y() + 0.0) / dimensions.y(), 2));
-            }
-        }
+        float[] rayCastDistances = performRayCasting();
 
         Tile nearestPellet = getNearestPellet();
-        Vector2d relativeCoordinates = translateRelative(nearestPellet.getPosition());
+        Vector2d relativePelletPos = translateRelative(nearestPellet.getPosition());
 
-        Direction suggestedDirection = getFirstStepToTile(nearestPellet);
-        if (suggestedDirection == null) {
-            suggestedDirection = pacman.getDirection();
-        }
-        // transform suggested direction to be relative to pacman
-        Vector2d suggestedDirectionRelative = rotateRelative(new Vector2d(suggestedDirection.getDx(), suggestedDirection.getDy()));
+        Direction suggestedPelletDirection = getSuggestedDirection(nearestPellet);
+        Vector2d suggestedPelletDirRelative = rotateRelative(new Vector2d(
+            suggestedPelletDirection.getDx(),
+            suggestedPelletDirection.getDy()
+        ));
 
-        Tile nearestPowerPellet = nearestPowerPellet();
-        if(nearestPowerPellet == null){
-            nearestPowerPellet = pacman.getMaze().getTile(pacman.getTilePosition());
-        }
-        Vector2d relativePowerPellet = translateRelative(nearestPowerPellet.getPosition());
+        Tile nearestPowerPellet = getNearestPowerPellet();
+        Vector2d relativePowerPelletPos = translateRelative(nearestPowerPellet.getPosition());
 
-        Direction suggestedPowerDirection = getFirstStepToTile(nearestPowerPellet);
-        if (suggestedPowerDirection == null) {
-            suggestedPowerDirection = pacman.getDirection();
-        }
-        Vector2d suggestedPowerDirectionRelative = rotateRelative(new Vector2d(suggestedPowerDirection.getDx(), suggestedPowerDirection.getDy()));
+        Direction suggestedPowerDirection = getSuggestedDirection(nearestPowerPellet);
+        Vector2d suggestedPowerDirRelative = rotateRelative(new Vector2d(
+            suggestedPowerDirection.getDx(),
+            suggestedPowerDirection.getDy()
+        ));
 
+        GhostInfo ghostInfo = gatherGhostInformation();
 
-        List<Entity> entities = pacman.getMaze().getEntities();
-
-        List<GhostEntity> ghosts = new ArrayList<>();
-        for(Entity mapEntity : entities){
-            if(mapEntity instanceof PacmanEntity){
-                continue;
-            }
-            if(mapEntity instanceof GhostEntity){
-                ghosts.add((GhostEntity) mapEntity);
-            }
-        }
-
-        int[] ghostDistances = new int[4];
-        Vector2d[] ghostDirections = new Vector2d[4];
-        for(int i = 0; i < 4; i++){
-            ghostDistances[i] = -1;
-            ghostDirections[i] = null;
-        }
-        int ghostIndex = 0;
-        for(GhostEntity ghost : ghosts){
-            int distance = distances[ghost.getTilePosition().x()][ghost.getTilePosition().y()];
-            if(distance == -1){
-                continue;
-            }
-            Vector2i vector2i = ghost.getTilePosition();
-            Tile tile = pacman.getMaze().getTile(vector2i);
-            Direction direction = getFirstStepToTile(tile);
-            if(direction == null){
-                continue;
-            }
-            ghostDistances[ghostIndex] = distance;
-            Vector2d relativeDirection = new Vector2d(direction.getDx(), direction.getDy());
-            relativeDirection = rotateRelative(relativeDirection);
-            ghostDirections[ghostIndex] = relativeDirection;
-            ghostIndex++;
-        }
-
-
-        float[] inputs = new float[]{
-            rayCast[0],
-            rayCast[1],
-            rayCast[2],
-            rayCast[3],
-            (float) relativeCoordinates.x() / (float) dimensions.x(),
-            (float) relativeCoordinates.y() / (float) dimensions.y(),
-
-            // suggested direction x, y
-            (float) suggestedDirectionRelative.x(),
-            (float) suggestedDirectionRelative.y(),
-            // distance to nearest pellet
-            distances[nearestPellet.getPosition().x()][nearestPellet.getPosition().y()],
-
-//            (float) relativePowerPellet.x() / (float) dimensions.x(),
-//            (float) relativePowerPellet.y() / (float) dimensions.y(),
-//            (float) suggestedPowerDirectionRelative.x(),
-//            (float) suggestedPowerDirectionRelative.y(),
-//            // distance to nearest power pellet
-//            distances[nearestPowerPellet.getPosition().x()][nearestPowerPellet.getPosition().y()],
-//            ghostDistances[0],
-//            ghostDistances[1],
-//            ghostDistances[2],
-//            ghostDistances[3],
-//            ghostDirections[0] == null ? 0 : (float) ghostDirections[0].x(),
-//            ghostDirections[0] == null ? 0 : (float) ghostDirections[0].y(),
-//            ghostDirections[1] == null ? 0 : (float) ghostDirections[1].x(),
-//            ghostDirections[1] == null ? 0 : (float) ghostDirections[1].y(),
-//            ghostDirections[2] == null ? 0 : (float) ghostDirections[2].x(),
-//            ghostDirections[2] == null ? 0 : (float) ghostDirections[2].y(),
-//            ghostDirections[3] == null ? 0 : (float) ghostDirections[3].x(),
-//            ghostDirections[3] == null ? 0 : (float) ghostDirections[3].y(),
-
-        //            pacman.getDirection().ordinal() / 4.0f,
-        //            (float) pacman.getTilePosition().x() / (float) dimensions.x(),
-        //            (float) pacman.getTilePosition().y() / (float) dimensions.y(),
-
-            random.nextFloat() * 2 - 1,
-        };
-
-//        System.out.println(Arrays.toString(inputs));
-
+        float[] inputs = buildInputs(rayCastDistances, relativePelletPos, suggestedPelletDirRelative,
+            nearestPellet, relativePowerPelletPos, suggestedPowerDirRelative, ghostInfo);
 
         float[] outputs = client.getCalculator().calculate(inputs).join();
 
-        int index = 0;
-        float max = outputs[0];
-        for (int i = 1; i < outputs.length; i++) {
-            if (outputs[i] > max) {
-                max = outputs[i];
-                index = i;
-            }
-        }
+        Direction newDirection = selectDirectionFromOutputs(outputs);
 
-        Direction newDirection = switch (index) {
-            case 0 -> pacman.getDirection();
-            case 1 -> pacman.getDirection().left();
-            case 2 -> pacman.getDirection().right();
-            case 3 -> pacman.getDirection().behind();
-            default -> throw new IllegalStateException("Unexpected value: " + index);
-        };
-
-        // ideas
-        /*
-         * Give reward for moving in direction of nearest pellet
-         * Give reward for eating pellet
-         * Give reward for eating power pellet
-         * Give reward for eating fruit
-         * Give reward for eating ghost
-         * Give penalty for getting eaten by ghost
-         * Being alive is a penalty unless you run out of power pellets
-         *
-         * Reward engineering
-         */
-        // Modded Rewards
-        Vector2ic newPosition = new Vector2i(pacman.getTilePosition().x() + newDirection.getDx(), pacman.getTilePosition().y() + newDirection.getDy());
-//        if(newPosition.distanceSquared(nearestPellet.getPosition()) < pacman.getTilePosition().distanceSquared(nearestPellet.getPosition())){
-//            scoreModifier += 5;
-//        }
-
-//        if(pacman.getMaze().getTile((Vector2i) newPosition).getState() == TileState.PELLET){
-//            scoreModifier += 100;
-//        }
-//
-//        if (!pacman.canMove(newDirection)) {
-//            scoreModifier -= 10;
-//        }
-
-//        scoreModifier -= 0.1f;
-
-        client.setScore(
-            pacman.getMaze().getLevelManager().getScore() + scoreModifier
-        ); // need to improve score hurisitcs
-
+        updateScore(newDirection);
 
         moveHistory.add(newDirection);
         return newDirection;
     }
 
-
     @Override
     public void render(@NotNull SpriteBatch batch) {
-        // TODO: You can render debug information here
-        /*
-        if (pacman != null) {
-            DebugDrawing.outlineTile(batch, pacman.getMaze().getTile(pacman.getTilePosition()), Color.RED);
-            DebugDrawing.drawDirection(batch, pacman.getTilePosition().x() * Maze.TILE_SIZE, pacman.getTilePosition().y() * Maze.TILE_SIZE, pacman.getDirection(), Color.RED);
-        }
-         */
         if (pacman != null) {
             Tile nearestPellet = getNearestPellet();
             DebugDrawing.outlineTile(batch, nearestPellet, Color.GREEN);
+            // Additional debug rendering can be added here
         }
     }
 
     /**
-     * Gets the first direction Pacman should move to reach the target tile via the shortest path.
-     * Uses the pre-computed distances array to work backwards from the target to find the optimal first step.
+     * Initializes the pacman entity if it's not already set.
+     */
+    private void initializePacman(@NotNull Entity entity) {
+        if (pacman == null) {
+            pacman = (PacmanEntity) entity;
+        }
+    }
+
+    /**
+     * Updates the directional fields based on Pacman's current direction.
+     */
+    private void updateDirections() {
+        forward = pacman.getDirection();
+        left = pacman.getDirection().left();
+        right = pacman.getDirection().right();
+        behind = pacman.getDirection().behind();
+    }
+
+    /**
+     * Handles special training conditions such as score updates and kill conditions.
+     */
+    private void handleSpecialTrainingConditions() {
+        int currentScore = pacman.getMaze().getLevelManager().getScore();
+        if (currentScore > lastScore) {
+            lastScore = currentScore;
+            updatesSinceLastScore = 0;
+            if (currentScore > 100_000) {
+                pacman.kill();
+                return;
+            }
+        } else {
+            updatesSinceLastScore++;
+        }
+        int maxUpdates = 60 * 10; // 10 seconds
+        if(lastScore > 5000){
+            maxUpdates = 60 * 20; // 20 seconds
+        }
+
+        if(lastScore > 10000){
+            maxUpdates = 60 * 30; // 30 seconds
+        }
+        if (numGhosts > 0) {
+            if(lastScore > 200){
+                maxUpdates = 60 * 120; // 2 minutes
+            }else{
+                maxUpdates = 60 * 3; // 3 seconds
+            }
+        }
+        if (updatesSinceLastScore > maxUpdates) {
+            pacman.kill();
+        }
+    }
+
+    /**
+     * Performs ray casting in all four directions to detect distances to walls.
      *
-     * @param targetTile the destination tile we want to reach
+     * @return an array containing distances in forward, left, right, and behind directions
+     */
+    private float[] performRayCasting() {
+        float[] rayCast = new float[4];
+        Vector2ic dimensions = pacman.getMaze().getDimensions();
+
+        for (int i = 0; i < 4; i++) {
+            Direction direction = getDirectionByIndex(i);
+            Vector2i position = new Vector2i(pacman.getTilePosition().x(), pacman.getTilePosition().y());
+
+            while (isWithinBounds(position, dimensions) &&
+                pacman.getMaze().getTile(position).getState() != TileState.WALL) {
+                position.add(direction.getDx(), direction.getDy());
+                if (!isWithinBounds(position, dimensions)) {
+                    break;
+                }
+                rayCast[i] = (float) Math.sqrt(
+                    Math.pow((position.x() - pacman.getTilePosition().x()) / (double) dimensions.x(), 2) +
+                        Math.pow((position.y() - pacman.getTilePosition().y()) / (double) dimensions.y(), 2)
+                );
+            }
+        }
+
+        return rayCast;
+    }
+
+    /**
+     * Retrieves the corresponding Direction based on the index.
+     *
+     * @param index the index (0: forward, 1: left, 2: right, 3: behind)
+     * @return the corresponding Direction
+     */
+    private Direction getDirectionByIndex(int index) {
+        return switch (index) {
+            case 0 -> forward;
+            case 1 -> left;
+            case 2 -> right;
+            case 3 -> behind;
+            default -> throw new IllegalStateException("Unexpected value: " + index);
+        };
+    }
+
+    /**
+     * Checks if the given position is within the maze boundaries.
+     *
+     * @param position   the position to check
+     * @param dimensions the dimensions of the maze
+     * @return true if within bounds, false otherwise
+     */
+    private boolean isWithinBounds(Vector2i position, Vector2ic dimensions) {
+        return position.x() >= 0 && position.x() < dimensions.x() &&
+            position.y() >= 0 && position.y() < dimensions.y();
+    }
+
+    /**
+     * Gathers information about the ghosts in the maze.
+     *
+     * @return a GhostInfo object containing distances and directions of ghosts
+     */
+    private GhostInfo gatherGhostInformation() {
+        List<GhostEntity> ghosts = getGhostEntities();
+        numGhosts = ghosts.size();
+        float[] ghostDistances = new float[4];
+        Vector2d[] ghostDirections = new Vector2d[4];
+        Arrays.fill(ghostDistances, 1);
+
+        int ghostIndex = 0;
+        for (GhostEntity ghost : ghosts) {
+            if (ghostIndex >= 4) break; // Limit to 4 ghosts
+            float distance = distances[ghost.getTilePosition().x()][ghost.getTilePosition().y()];
+            if (distance == -1) continue;
+            Tile ghostTile = pacman.getMaze().getTile(ghost.getTilePosition());
+            Direction direction = getFirstStepToTile(ghostTile);
+            if (direction == null) continue;
+
+            ghostDistances[ghostIndex] = distance / (pacman.getMaze().getDimensions().x() + pacman.getMaze().getDimensions().y());
+            ghostDirections[ghostIndex] = rotateRelative(new Vector2d(direction.getDx(), direction.getDy()));
+            ghostIndex++;
+        }
+
+        return new GhostInfo(ghostDistances, ghostDirections);
+    }
+
+    /**
+     * Retrieves all ghost entities from the maze.
+     *
+     * @return a list of GhostEntity objects
+     */
+    private List<GhostEntity> getGhostEntities() {
+        List<Entity> entities = pacman.getMaze().getEntities();
+        List<GhostEntity> ghosts = new ArrayList<>();
+        for (Entity entity : entities) {
+            if (entity instanceof GhostEntity ghost) {
+                ghosts.add(ghost);
+            }
+        }
+        return ghosts;
+    }
+
+    /**
+     * Builds the input array for the NEAT calculator.
+     *
+     * @param rayCastDistances          distances from ray casting
+     * @param relativePelletPos         relative position to the nearest pellet
+     * @param suggestedPelletDirRelative relative direction to the nearest pellet
+     * @param nearestPellet             the nearest pellet tile
+     * @param relativePowerPelletPos    relative position to the nearest power pellet
+     * @param suggestedPowerDirRelative relative direction to the nearest power pellet
+     * @param ghostInfo                 information about ghosts
+     * @return an array of input values
+     */
+    private float[] buildInputs(float[] rayCastDistances, Vector2d relativePelletPos,
+                                Vector2d suggestedPelletDirRelative, Tile nearestPellet,
+                                Vector2d relativePowerPelletPos, Vector2d suggestedPowerDirRelative,
+                                GhostInfo ghostInfo) {
+        Vector2ic dimensions = pacman.getMaze().getDimensions();
+//        System.out.println("rayCastDistances: " + Arrays.toString(rayCastDistances));
+//        if(numGhosts > 0)
+//        System.out.println(Arrays.toString(ghostInfo.ghostDirections) + " " + Arrays.toString(ghostInfo.ghostDistances));
+        return new float[]{
+//            // Ray cast distances
+//            rayCastDistances[0],
+//            rayCastDistances[1],
+//            rayCastDistances[2],
+//            rayCastDistances[3],
+//
+//            // Relative pellet coordinates
+//            (float) relativePelletPos.x() / dimensions.x(),
+//            (float) relativePelletPos.y() / dimensions.y(),
+
+            // Suggested pellet direction (x, y)
+            (float) suggestedPelletDirRelative.x(),
+            (float) suggestedPelletDirRelative.y(),
+//
+//            // Distance to nearest pellet
+//            distances[nearestPellet.getPosition().x()][nearestPellet.getPosition().y()] / (dimensions.x() + dimensions.y() + 0f),
+//
+//            // Relative power pellet coordinates
+            (float) relativePowerPelletPos.x() / dimensions.x(),
+            (float) relativePowerPelletPos.y() / dimensions.y(),
+//
+//            // Suggested power pellet direction (x, y)
+//            (float) suggestedPowerDirRelative.x(),
+//            (float) suggestedPowerDirRelative.y(),
+//
+//            // Distance to nearest power pellet
+//            distances[getNearestPowerPellet().getPosition().x()][getNearestPellet().getPosition().y()],
+//
+////            // Ghost distances
+            ghostInfo.ghostDistances[0],
+//            ghostInfo.ghostDistances[1],
+//            ghostInfo.ghostDistances[2],
+//            ghostInfo.ghostDistances[3],
+////
+////            // Ghost directions (x, y)
+            ghostInfo.ghostDirections[0] != null ? (float) ghostInfo.ghostDirections[0].x() : 0,
+            ghostInfo.ghostDirections[0] != null ? (float) ghostInfo.ghostDirections[0].y() : 0,
+//            ghostInfo.ghostDirections[1] != null ? (float) ghostInfo.ghostDirections[1].x() : 0,
+//            ghostInfo.ghostDirections[1] != null ? (float) ghostInfo.ghostDirections[1].y() : 0,
+//            ghostInfo.ghostDirections[2] != null ? (float) ghostInfo.ghostDirections[2].x() : 0,
+//            ghostInfo.ghostDirections[2] != null ? (float) ghostInfo.ghostDirections[2].y() : 0,
+//            ghostInfo.ghostDirections[3] != null ? (float) ghostInfo.ghostDirections[3].x() : 0,
+//            ghostInfo.ghostDirections[3] != null ? (float) ghostInfo.ghostDirections[3].y() : 0,
+//
+            pacman.getMaze().getFrightenedTimer() <= 3 ? 0 : (float) (pacman.getMaze().getFrightenedTimer() / 200f + 0.5),
+//
+//            // Random input for variability
+            random.nextFloat(),
+        };
+
+    }
+
+
+    /**
+     * Selects the direction based on the outputs from the NEAT calculator.
+     *
+     * @param outputs the output array from the NEAT calculator
+     * @return the selected Direction
+     */
+    private Direction selectDirectionFromOutputs(float[] outputs) {
+        int selectedIndex = 0;
+        float maxOutput = outputs[0];
+
+        for (int i = 1; i < outputs.length; i++) {
+            if (outputs[i] > maxOutput) {
+                maxOutput = outputs[i];
+                selectedIndex = i;
+            }
+        }
+
+        return switch (selectedIndex) {
+            case 0 -> forward;
+            case 1 -> left;
+            case 2 -> right;
+            case 3 -> behind;
+            default -> throw new IllegalStateException("Unexpected output index: " + selectedIndex);
+        };
+    }
+
+    /**
+     * Updates the score based on the new direction.
+     *
+     * @param newDirection the direction chosen
+     */
+    private void updateScore(Direction newDirection) {
+        Vector2i newPosition = new Vector2i(
+            pacman.getTilePosition().x() + newDirection.getDx(),
+            pacman.getTilePosition().y() + newDirection.getDy()
+        );
+
+        // Example score modifications (can be customized)
+        // if (isMovingTowardsPellet(newPosition)) {
+        //     scoreModifier += 5;
+        // }
+        // if (pacman.getMaze().getTile(newPosition).getState() == TileState.PELLET) {
+        //     scoreModifier += 100;
+        // }
+        // if (!pacman.canMove(newDirection)) {
+        //     scoreModifier -= 10;
+        // }
+
+        // Global score penalty to encourage progress
+//        scoreModifier -= 0.001f;
+
+
+        client.setScore(
+            pacman.getMaze().getLevelManager().getScore() + scoreModifier
+        ); // TODO: Improve score heuristics
+    }
+
+    /**
+     * Retrieves the first step direction towards the target tile using the pre-computed distances.
+     *
+     * @param targetTile the destination tile
      * @return the Direction to move in, or null if no path exists
      */
     @Nullable
@@ -320,160 +422,194 @@ public class NeatPacmanBehavior implements Behavior {
         }
 
         // Start from the target and work backwards to find the first step
-        Vector2i currentBacktrack = new Vector2i(targetPos);
+        Vector2i backtrackPos = new Vector2i(targetPos);
         int currentDistance = distances[targetPos.x()][targetPos.y()];
 
-        // Keep backtracking until we find a position adjacent to our current position
         while (currentDistance > 1) {
-            boolean foundStep = false;
+            boolean stepFound = false;
 
-            // Check all adjacent tiles
             for (Direction dir : Direction.values()) {
-                int nextX = currentBacktrack.x() + dir.getDx();
-                int nextY = currentBacktrack.y() + dir.getDy();
+                int nextX = backtrackPos.x() + dir.getDx();
+                int nextY = backtrackPos.y() + dir.getDy();
 
-                // Skip if out of bounds
-                if (nextX < 0 || nextX >= dimensions.x() ||
-                    nextY < 0 || nextY >= dimensions.y()) {
+                if (!isWithinBounds(new Vector2i(nextX, nextY), dimensions)) {
                     continue;
                 }
 
-                // If this adjacent tile is one step closer to Pacman
                 if (distances[nextX][nextY] == currentDistance - 1) {
-                    currentBacktrack.set(nextX, nextY);
+                    backtrackPos.set(nextX, nextY);
                     currentDistance--;
-                    foundStep = true;
+                    stepFound = true;
                     break;
                 }
             }
 
-            // If we couldn't find a valid step back, something's wrong with the path
-            if (!foundStep) {
-                return null;
+            if (!stepFound) {
+                return null; // Path is broken
             }
         }
 
-        // Now currentBacktrack should be adjacent to Pacman's position
-        // Find which direction leads to it
+        // Determine the direction from Pacman's current position to the backtrack position
         for (Direction dir : Direction.values()) {
             int stepX = currentPos.x() + dir.getDx();
             int stepY = currentPos.y() + dir.getDy();
 
-            if (stepX == currentBacktrack.x() && stepY == currentBacktrack.y()) {
+            if (stepX == backtrackPos.x() && stepY == backtrackPos.y()) {
                 return dir;
             }
         }
 
-        // If we get here, something went wrong
-        return null;
+        return null; // Should not reach here
     }
 
     /**
      * Translates the given coordinates to be relative to Pacman's position and orientation.
-     * This is useful for converting the target tile's position to a relative position.
      *
      * @param coordinates the coordinates to translate
      * @return the translated coordinates
      */
-    public Vector2d translateRelative(Vector2ic coordinates) {
-        // new coordinates are relative to pacman
-
-        Vector2i pacmanCoordinates = pacman.getTilePosition();
-        Vector2d relative = new Vector2d(coordinates.x() - pacmanCoordinates.x(), coordinates.y() - pacmanCoordinates.y());
-        // also orient the coordinates to the direction of pacman
-        double newCoordinatesX = relative.x() * forward.getDx() + relative.x() * right.getDx();
-        double newCoordinatesY = relative.y() * forward.getDy() + relative.y() * right.getDy();
-        relative.set(newCoordinatesX, newCoordinatesY);
-        return relative;
+    private Vector2d translateRelative(Vector2ic coordinates) {
+        Vector2i pacmanPos = pacman.getTilePosition();
+        Vector2d relative = new Vector2d(
+            coordinates.x() - pacmanPos.x(),
+            coordinates.y() - pacmanPos.y()
+        );
+        return rotateRelative(relative);
     }
 
-
-    public Vector2d rotateRelative(Vector2d coordinates){
-        Vector2d relative = new Vector2d(coordinates.x(), coordinates.y());
-        // also orient the coordinates to the direction of pacman
-        double newCoordinatesX = relative.x() * forward.getDx() + relative.x() * right.getDx();
-        double newCoordinatesY = relative.y() * forward.getDy() + relative.y() * right.getDy();
-        relative.set(newCoordinatesX, newCoordinatesY);
-        return relative;
-    }
-    public Vector2d translateRelative(Vector2d coordinates){
-        Vector2i pacmanCoordinates = pacman.getTilePosition();
-        Vector2d relative = new Vector2d(coordinates.x - pacmanCoordinates.x(), coordinates.y - pacmanCoordinates.y);
-        double newCoordinatesX = relative.x * forward.getDx() + relative.x * right.getDx();
-        double newCoordinatesY = relative.y * forward.getDy() + relative.y * right.getDy();
-        relative.set(newCoordinatesX, newCoordinatesY);
-        return relative;
+    /**
+     * Rotates the given coordinates based on Pacman's current direction.
+     *
+     * @param coordinates the coordinates to rotate
+     * @return the rotated coordinates
+     */
+    private Vector2d rotateRelative(Vector2d coordinates) {
+        // Assuming rotation based on forward and right directions
+        double rotatedX = coordinates.x() * forward.getDx() + coordinates.y() * right.getDx();
+        double rotatedY = coordinates.x() * forward.getDy() + coordinates.y() * right.getDy();
+        return new Vector2d(rotatedX, rotatedY);
     }
 
-    public Tile nearestPowerPellet() {
+    /**
+     * Finds the nearest power pellet in the maze.
+     *
+     * @return the nearest power pellet tile
+     */
+    @NotNull
+    public Tile getNearestPowerPellet() {
         Vector2ic dimensions = pacman.getMaze().getDimensions();
         Tile nearestPowerPellet = null;
+
         for (int y = 0; y < dimensions.y(); y++) {
             for (int x = 0; x < dimensions.x(); x++) {
                 Tile tile = pacman.getMaze().getTile(x, y);
                 if (tile.getState() == TileState.POWER_PELLET) {
-                    if (nearestPowerPellet == null) {
+                    if (nearestPowerPellet == null ||
+                        distances[x][y] < distances[nearestPowerPellet.getPosition().x()][nearestPowerPellet.getPosition().y()]) {
                         nearestPowerPellet = tile;
-                    } else {
-                        if (distances[x][y] < distances[nearestPowerPellet.getPosition().x()][nearestPowerPellet.getPosition().y()]) {
-                            nearestPowerPellet = tile;
-                        }
                     }
                 }
             }
         }
+
+        // Fallback to -1, -1 if no power pellets are found
+        if (nearestPowerPellet == null) {
+            nearestPowerPellet = pacman.getMaze().getTile(0, 0);
+        }
+
         return nearestPowerPellet;
     }
 
+    /**
+     * Finds the nearest pellet (regular or power) in the maze.
+     *
+     * @return the nearest pellet tile
+     */
+    @NotNull
     public Tile getNearestPellet() {
         Vector2ic dimensions = pacman.getMaze().getDimensions();
         Tile nearestPellet = null;
+
         for (int y = 0; y < dimensions.y(); y++) {
             for (int x = 0; x < dimensions.x(); x++) {
                 Tile tile = pacman.getMaze().getTile(x, y);
                 if (tile.getState() == TileState.PELLET || tile.getState() == TileState.POWER_PELLET) {
-                    if (nearestPellet == null) {
+                    if (nearestPellet == null ||
+                        distances[x][y] < distances[nearestPellet.getPosition().x()][nearestPellet.getPosition().y()]) {
                         nearestPellet = tile;
-                    } else {
-                        if (distances[x][y] < distances[nearestPellet.getPosition().x()][nearestPellet.getPosition().y()]) {
-                            nearestPellet = tile;
-                        }
                     }
                 }
             }
         }
+
         return nearestPellet;
     }
 
+
+
+    /**
+     * Computes the distances from Pacman's current position to all reachable tiles using BFS.
+     *
+     * @return a 2D array of distances
+     */
     public int[][] computeDistances() {
-        // path search
-        Vector2ic dimensions = this.pacman.getMaze().getDimensions();
-        Vector2ic pacmanPosition = this.pacman.getTilePosition();
+        Vector2ic dimensions = pacman.getMaze().getDimensions();
+        Vector2ic pacmanPos = pacman.getTilePosition();
         int[][] distance = new int[dimensions.x()][dimensions.y()];
+
         for (int y = 0; y < dimensions.y(); y++) {
             for (int x = 0; x < dimensions.x(); x++) {
                 distance[x][y] = -1;
             }
         }
-        distance[pacmanPosition.x()][pacmanPosition.y()] = 0;
-        Queue<Vector2ic> queue = new LinkedList<>();
-        queue.add(pacmanPosition);
+
+        distance[pacmanPos.x()][pacmanPos.y()] = 0;
+        Queue<Vector2i> queue = new LinkedList<>();
+        queue.add(new Vector2i(pacmanPos));
+
         while (!queue.isEmpty()) {
-            Vector2ic current = queue.poll();
-            for (Direction direction : Direction.values()) {
-                int dx = direction.getDx();
-                int dy = direction.getDy();
-                Vector2i next = new Vector2i(current.x() + dx, current.y() + dy);
-                if (next.x() < 0 || next.x() >= dimensions.x() || next.y() < 0 || next.y() >= dimensions.y()) {
+            Vector2i current = queue.poll();
+            for (Direction dir : Direction.values()) {
+                int nextX = current.x() + dir.getDx();
+                int nextY = current.y() + dir.getDy();
+
+                if (!isWithinBounds(new Vector2i(nextX, nextY), dimensions)) {
                     continue;
                 }
-                if (this.pacman.getMaze().getTile(next).getState() != TileState.WALL && distance[next.x()][next.y()] == -1) { // also avoid ghosts
-                    distance[next.x()][next.y()] = distance[current.x()][current.y()] + 1;
-                    queue.add(next);
+
+                if (pacman.getMaze().getTile(nextX, nextY).getState() != TileState.WALL &&
+                    distance[nextX][nextY] == -1) {
+                    distance[nextX][nextY] = distance[current.x()][current.y()] + 1;
+                    queue.add(new Vector2i(nextX, nextY));
                 }
             }
         }
 
         return distance;
+    }
+
+    /**
+     * Retrieves the suggested direction towards the target tile.
+     *
+     * @param targetTile the target tile
+     * @return the suggested Direction
+     */
+    @Nullable
+    private Direction getSuggestedDirection(Tile targetTile) {
+        Direction direction = getFirstStepToTile(targetTile);
+        return direction != null ? direction : pacman.getDirection();
+    }
+
+    /**
+     * Helper class to store ghost distances and directions.
+     */
+    private static class GhostInfo {
+        float[] ghostDistances;
+        Vector2d[] ghostDirections;
+
+        GhostInfo(float[] ghostDistances, Vector2d[] ghostDirections) {
+            this.ghostDistances = ghostDistances;
+            this.ghostDirections = ghostDirections;
+        }
     }
 }

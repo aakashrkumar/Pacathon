@@ -13,7 +13,7 @@ public class Lwjgl3Launcher {
     }
 
     private static Lwjgl3Application createApplication() {
-        boolean isTraining = true; // set this as false to try out the tournament settings
+        boolean isTraining = false; // set this as false to try out the tournament settings
         if (isTraining) {
             Lwjgl3ApplicationConfiguration config = getDefaultConfiguration();
             // disable vsync to run the game as fast as possible

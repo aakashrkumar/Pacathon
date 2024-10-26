@@ -21,7 +21,6 @@ import java.util.concurrent.ThreadLocalRandom;
  * maze, or even change the behavior of the entities during training.
  */
 public final class SpecialTrainingConditions {
-
     // Prevent instantiation
     private SpecialTrainingConditions() {
     }
@@ -30,7 +29,7 @@ public final class SpecialTrainingConditions {
         return event -> {
             // Prevent ghosts from spawning during training
             if (event.getEntityType() == EntityType.GHOST) {
-                event.setCancelled(true);
+//                event.setCancelled(true);
             }
         };
     }

@@ -72,7 +72,7 @@ public class NeatPacmanBehavior implements Behavior {
             updateSinceLastScore++;
         }
 
-        if (updateSinceLastScore > 60 * 60) {
+        if (updateSinceLastScore > 60 * 20) {
             pacman.kill();
             return Direction.UP;
 
@@ -174,17 +174,23 @@ public class NeatPacmanBehavior implements Behavior {
         Vector2d newCoordinates = new Vector2d(coordinates.x() - pacmanCoordinates.x(), coordinates.y() - pacmanCoordinates.y());
         // also orient the coordinates to the direction of pacman
         switch (pacman.getDirection()) {
-            case UP:
-                break;
-            case DOWN:
-                newCoordinates.set(-newCoordinates.x, -newCoordinates.y);
-                break;
-            case LEFT:
-                newCoordinates.set(-newCoordinates.y, newCoordinates.x);
-                break;
-            case RIGHT:
-                newCoordinates.set(newCoordinates.y, -newCoordinates.x);
-                break;
+            case UP -> {
+                double temp = newCoordinates.x();
+                newCoordinates.x = -newCoordinates.y();
+                newCoordinates.y = temp;
+            }
+            case DOWN -> {
+                double temp = newCoordinates.x();
+                newCoordinates.x = newCoordinates.y();
+                newCoordinates.y = -temp;
+            }
+            case LEFT -> {
+                newCoordinates.x = -newCoordinates.x();
+                newCoordinates.y = -newCoordinates.y();
+            }
+            case RIGHT -> {
+                // do nothing
+            }
         }
 
         return newCoordinates;

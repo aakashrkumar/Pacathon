@@ -18,7 +18,7 @@ public class Lwjgl3Launcher {
             Lwjgl3ApplicationConfiguration config = getDefaultConfiguration();
             // disable vsync to run the game as fast as possible
             config.useVsync(false);
-            config.setForegroundFPS(200);
+            config.setForegroundFPS(2000);
 
             // hard limit on fps to see the game running at a reasonable speed
              return new Lwjgl3Application(new Main(), config);

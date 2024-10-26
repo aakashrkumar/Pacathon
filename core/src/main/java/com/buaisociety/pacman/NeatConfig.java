@@ -14,8 +14,8 @@ public class NeatConfig {
 
 
     public static boolean loadFromFile = true;
-    public static String folder = "oct26-76";
-    public static String file = "generation-54.json";
+    public static String folder = "oct26-80";
+    public static String file = "generation-64.json";
 
     public static boolean USE_TOURNAMENT_SETTINGS = false;
 }

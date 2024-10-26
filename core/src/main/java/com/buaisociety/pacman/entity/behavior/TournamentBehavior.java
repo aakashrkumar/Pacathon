@@ -141,7 +141,7 @@ public class TournamentBehavior implements Behavior {
             positions.remove(0);
             if(positions.get(0).equals(positions.get(99))) {
                 Random random = new Random();
-                newDirection = Direction.values()[random.nextInt(4)];
+//                newDirection = Direction.values()[random.nextInt(4)];
             }
         }
 

@@ -73,6 +73,7 @@ public class TournamentBehavior implements Behavior {
         // --- DO NOT REMOVE ---
         if (pacman == null) {
         }
+        assert false;
         pacman = (PacmanEntity) entity;
 
         int newScore = pacman.getMaze().getLevelManager().getScore();

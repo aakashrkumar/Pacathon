@@ -51,7 +51,7 @@ public class Main extends ApplicationAdapter {
     private final @NotNull EventSystem events = new EventSystem();
     private final @NotNull Vector2i visibleGames = new Vector2i(4, 2);
     private final @NotNull List<PacmanNeatClient> managers = new ArrayList<>();
-    private final int totalGames = 500;
+    private final int totalGames = NeatConfig.populationSize;
     private GameLoop secondLoop;  // 1 update per second
     private boolean paused;
     private boolean showNetworks;
